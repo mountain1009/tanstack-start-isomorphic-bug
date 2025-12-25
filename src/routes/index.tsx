@@ -1,5 +1,6 @@
+import * as React from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { createIsomorphicFn } from "@tanstack/react-start";
+import { createIsomorphicFn, createServerFn } from "@tanstack/react-start";
 
 /**
  * Bug Reproduction: createIsomorphicFn doesn't work at module top-level
@@ -23,13 +24,33 @@ const moduleLevel = getEnvironment();
 console.log("[MODULE] typeof moduleLevel:", typeof moduleLevel);
 console.log("[MODULE] moduleLevel:", moduleLevel);
 
+// Test: Inside Server Function
+const testInServerFn = createServerFn().handler(async () => {
+  const env = getEnvironment();
+  console.log("[SERVER_FN] typeof env:", typeof env);
+  console.log("[SERVER_FN] env:", env);
+  return {
+    value: typeof env === "function" ? "[Function]" : String(env),
+    type: typeof env,
+  };
+});
+
 export const Route = createFileRoute("/")({
   component: HomeComponent,
+  loader: async () => {
+    // Test in loader (runs on server during SSR)
+    const result = await testInServerFn();
+    console.log("[LOADER] Server function result:", result);
+    return { serverFnResult: result };
+  },
 });
 
 function HomeComponent() {
   // This works correctly and returns "client" string
   const componentLevel = getEnvironment();
+
+  // Get server function result from loader
+  const { serverFnResult } = Route.useLoaderData();
 
   const formatValue = (val: unknown): string => {
     if (val === undefined) return "undefined";
@@ -69,6 +90,21 @@ function HomeComponent() {
         </p>
         <p style={{ color: typeof componentLevel === "string" ? "green" : "red" }}>
           {typeof componentLevel === "string"
+            ? "✅ OK: Returns string"
+            : "❌ BUG: Returns non-string"}
+        </p>
+      </section>
+
+      <section style={{ border: "1px solid #ccc", padding: "1rem", marginBottom: "1rem", borderRadius: "8px" }}>
+        <h2>Inside Server Function (via loader)</h2>
+        <p>
+          <strong>Value:</strong> <code>{serverFnResult.value}</code>
+        </p>
+        <p>
+          <strong>typeof:</strong> <code>{serverFnResult.type}</code>
+        </p>
+        <p style={{ color: serverFnResult.type === "string" ? "green" : "red" }}>
+          {serverFnResult.type === "string"
             ? "✅ OK: Returns string"
             : "❌ BUG: Returns non-string"}
         </p>
